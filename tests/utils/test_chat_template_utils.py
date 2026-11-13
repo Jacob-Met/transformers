@@ -16,7 +16,7 @@ import copy
 import dataclasses
 import unittest
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal, NewType
 
 import numpy as np
 
@@ -118,6 +118,42 @@ class JsonSchemaGeneratorTest(unittest.TestCase):
             get_json_schema(enum_string_keys)["function"]["parameters"]["properties"]["buckets"]["type"],
             "object",
         )
+
+        StringBucket = NewType("StringBucket", str)
+        NestedStringBucket = NewType("NestedStringBucket", StringBucket)
+        NumericBucket = NewType("NumericBucket", int)
+
+        def wrapped_string_keys(buckets: dict[NestedStringBucket, int]):
+            """Look up a wrapped string bucket.
+
+            Args:
+                buckets: Counts keyed by string-based identifiers.
+            """
+            return buckets[NestedStringBucket("1")]
+
+        def wrapped_numeric_keys(buckets: dict[NumericBucket, int]):
+            """Look up a wrapped numeric bucket.
+
+            Args:
+                buckets: Counts keyed by integer-based identifiers.
+            """
+            return buckets[NumericBucket(1)]
+
+        def annotated_string_keys(buckets: dict[Annotated[str, "display key"], int]):
+            """Look up an annotated string bucket.
+
+            Args:
+                buckets: Counts keyed by annotated strings.
+            """
+            return buckets["1"]
+
+        for valid_function in (wrapped_string_keys, annotated_string_keys):
+            self.assertEqual(
+                get_json_schema(valid_function)["function"]["parameters"]["properties"]["buckets"]["type"],
+                "object",
+            )
+        with self.assertRaisesRegex(TypeHintParsingException, "Dict keys must be strings"):
+            get_json_schema(wrapped_numeric_keys)
 
     def test_bare_container_types(self):
         def fn(x: list, y: tuple, z: dict):

@@ -202,6 +202,9 @@ def _parse_type_hint(hint: str) -> dict:
         # JSON object keys are strings; other Python key types cannot be reconstructed from a tool call.
         if len(args) == 2:
             key_type = args[0]
+            # NewType wrappers over str have the same runtime representation as strings.
+            while hasattr(key_type, "__supertype__"):
+                key_type = key_type.__supertype__
             if (
                 key_type not in (str, Any)
                 and not (isinstance(key_type, type) and issubclass(key_type, str))
