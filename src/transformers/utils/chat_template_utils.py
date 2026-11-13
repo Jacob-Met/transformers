@@ -199,8 +199,20 @@ def _parse_type_hint(hint: str) -> dict:
         return {"type": "array", "prefixItems": [_parse_type_hint(t) for t in args]}
 
     elif origin is dict:
-        # The JSON equivalent to a dict is 'object', which mandates that all keys are strings
-        # However, we can specify the type of the dict values with "additionalProperties"
+        # JSON object keys are strings; other Python key types cannot be reconstructed from a tool call.
+        if len(args) == 2:
+            key_type = args[0]
+            if (
+                key_type not in (str, Any)
+                and not (isinstance(key_type, type) and issubclass(key_type, str))
+                and not (
+                    get_origin(key_type) is Literal and all(isinstance(value, str) for value in get_args(key_type))
+                )
+            ):
+                raise TypeHintParsingException(
+                    f"Dict keys must be strings to be represented in JSON, got {key_type!r}."
+                )
+        # The JSON schema can specify the type of the dict values with "additionalProperties".
         out = {"type": "object"}
         if len(args) == 2:
             out["additionalProperties"] = _parse_type_hint(args[1])

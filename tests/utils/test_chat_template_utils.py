@@ -63,6 +63,62 @@ class JsonSchemaGeneratorTest(unittest.TestCase):
         }
         self.assertEqual(schema["function"], expected_schema)
 
+    def test_dict_key_type_matches_json(self):
+        def numeric_keys(buckets: dict[int, int]):
+            """Look up a numeric bucket.
+
+            Args:
+                buckets: Counts keyed by integers.
+            """
+            return buckets[1]
+
+        # A JSON tool call decodes every object key as a string, never an int.
+        with self.assertRaisesRegex(TypeHintParsingException, "Dict keys must be strings"):
+            get_json_schema(numeric_keys)
+
+        def string_keys(buckets: dict[str, int]):
+            """Look up a string bucket.
+
+            Args:
+                buckets: Counts keyed by strings.
+            """
+            return buckets["1"]
+
+        schema = get_json_schema(string_keys)
+        self.assertEqual(
+            schema["function"]["parameters"]["properties"]["buckets"],
+            {"type": "object", "additionalProperties": {"type": "integer"}, "description": "Counts keyed by strings."},
+        )
+
+        def literal_keys(buckets: dict[Literal["north", "south"], int]):
+            """Look up a named region.
+
+            Args:
+                buckets: Counts keyed by region.
+            """
+            return buckets["north"]
+
+        self.assertEqual(
+            get_json_schema(literal_keys)["function"]["parameters"]["properties"]["buckets"]["type"],
+            "object",
+        )
+
+        class Region(str, Enum):
+            NORTH = "north"
+
+        def enum_string_keys(buckets: dict[Region, int]):
+            """Look up a string-enum region.
+
+            Args:
+                buckets: Counts keyed by region names.
+            """
+            return buckets[Region.NORTH]
+
+        self.assertEqual(
+            get_json_schema(enum_string_keys)["function"]["parameters"]["properties"]["buckets"]["type"],
+            "object",
+        )
+
     def test_bare_container_types(self):
         def fn(x: list, y: tuple, z: dict):
             """
